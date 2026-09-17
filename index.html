@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="km">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <title>RMSDB Database Design - Responsive Interactive ER Diagram</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts for Khmer & Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:ital,wght@0,300;0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'Kantumruy Pro', 'sans-serif'],
+                        khmer: ['Kantumruy Pro', 'sans-serif']
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0f7ff',
+                            100: '#e0effe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            900: '#1e3a8a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbars */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+
+        /* Interactive Canvas styling */
+        .svg-container {
+            cursor: grab;
+            user-select: none;
+            touch-action: none;
+        }
+        .svg-container:active {
+            cursor: grabbing;
+        }
+
+        /* ER Shapes & Animations */
+        .entity-box {
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
+            transition: transform 0.2s ease, filter 0.2s ease;
+        }
+        .entity-box:hover, .entity-box.active {
+            filter: drop-shadow(0 8px 18px rgba(37,99,235,0.45));
+            transform: translateY(-2px);
+        }
+
+        /* Dynamic SVG Lines */
+        .rel-line {
+            stroke-dasharray: 6;
+            animation: dash 35s linear infinite;
+            transition: stroke 0.3s, stroke-width 0.3s, opacity 0.3s;
+        }
+        @keyframes dash {
+            to { stroke-dashoffset: -1000; }
+        }
+
+        .highlighted-line {
+            stroke: #3b82f6 !important;
+            stroke-width: 3px !important;
+            stroke-dasharray: none !important;
+        }
+
+        .dimmed {
+            opacity: 0.2;
+            transition: opacity 0.3s ease;
+        }
+
+        .highlighted-node {
+            filter: drop-shadow(0 0 12px rgba(59,130,246,0.7)) !important;
+        }
+
+        /* Mobile Drawer Animations */
+        .mobile-drawer {
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans h-screen flex flex-col overflow-hidden select-none">
+
+    <header class="bg-slate-900/95 backdrop-blur border-b border-slate-800 px-3 md:px-5 py-2.5 flex items-center justify-between z-30 shrink-0">
+        <div class="flex items-center space-x-2.5">
+            <div class="bg-gradient-to-tr from-blue-600 to-indigo-500 p-2 rounded-xl text-white shadow-lg shadow-blue-500/20 shrink-0">
+                <i data-lucide="database" class="w-5 h-5 md:w-6 md:h-6"></i>
+            </div>
+            <div>
+                <h1 class="text-sm md:text-lg font-bold text-white leading-tight flex items-center gap-1.5">
+                    <span>RMSDB</span>
+                    <span class="text-[10px] md:text-xs bg-blue-500/20 text-blue-300 font-medium px-2 py-0.5 rounded border border-blue-500/30">ERD</span>
+                </h1>
+                <p class="text-[11px] text-slate-400 font-khmer hidden sm:block">ប្រព័ន្ធគ្រប់គ្រងទិន្នន័យសាលារៀន (Responsive Schema)</p>
+            </div>
+        </div>
+
+        <!-- Search Bar and Action Controls -->
+        <div class="flex items-center gap-2 md:gap-3">
+            <div class="relative w-36 sm:w-56 md:w-64">
+                <i data-lucide="search" class="w-3.5 h-3.5 md:w-4 md:h-4 absolute left-2.5 top-2.5 text-slate-400"></i>
+                <input type="text" id="searchInput" oninput="handleSearch()" placeholder="ស្វែងរក..." 
+                       class="w-full bg-slate-950/80 border border-slate-800 text-xs text-slate-200 pl-8 md:pl-9 pr-7 py-1.5 md:py-2 rounded-lg focus:outline-none focus:border-blue-500 transition-all font-khmer">
+                <button id="clearSearchBtn" onclick="clearSearch()" class="hidden absolute right-2 top-2 text-slate-400 hover:text-white">
+                    <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                </button>
+            </div>
+
+            <!-- Desktop View Controls -->
+            <div class="hidden md:flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5">
+                <button onclick="zoomCanvas(0.15)" title="Zoom In" class="p-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded transition"><i data-lucide="zoom-in" class="w-4 h-4"></i></button>
+                <button onclick="zoomCanvas(-0.15)" title="Zoom Out" class="p-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded transition"><i data-lucide="zoom-out" class="w-4 h-4"></i></button>
+                <button onclick="resetZoom()" title="Reset View" class="p-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded transition"><i data-lucide="maximize-2" class="w-4 h-4"></i></button>
+            </div>
+
+            <!-- Toggle Table Sidebar Button -->
+            <button onclick="toggleSidebar()" class="p-1.5 md:p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-200 transition flex items-center gap-1.5 text-xs font-khmer">
+                <i data-lucide="list" class="w-4 h-4 text-blue-400"></i>
+                <span class="hidden md:inline">បញ្ជី Entity</span>
+            </button>
+        </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden relative">
+
+        <!-- Responsive Sidebar / Mobile Drawer Overlay -->
+        <div id="drawerOverlay" onclick="toggleSidebar()" class="hidden fixed inset-0 bg-black/60 z-30 transition-opacity"></div>
+
+        <!-- Sidebar / Drawer Container -->
+        <aside id="sidebar" class="mobile-drawer fixed md:relative bottom-0 left-0 right-0 md:right-auto md:top-0 w-full md:w-80 h-[70vh] md:h-full bg-slate-900/95 md:bg-slate-900 border-t md:border-t-0 md:border-r border-slate-800 flex flex-col z-40 transform translate-y-full md:translate-y-0 shrink-0 rounded-t-2xl md:rounded-none">
+            
+            <!-- Mobile Drag Indicator Top Bar -->
+            <div class="w-full flex justify-center py-2 md:hidden cursor-pointer" onclick="toggleSidebar()">
+                <div class="w-12 h-1.5 bg-slate-700 rounded-full"></div>
+            </div>
+
+            <div class="px-4 py-2.5 border-b border-slate-800 flex justify-between items-center bg-slate-900/90">
+                <h2 class="font-bold text-xs md:text-sm text-slate-200 flex items-center gap-2 font-khmer">
+                    <i data-lucide="table" class="w-4 h-4 text-blue-400"></i>
+                    បញ្ជី Entity & Attributes
+                </h2>
+                <div class="flex items-center gap-2">
+                    <span id="entityCount" class="text-[10px] md:text-xs bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full border border-slate-700">16 Tables</span>
+                    <button onclick="toggleSidebar()" class="md:hidden text-slate-400 hover:text-white p-1">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Scrollable Entity Cards -->
+            <div class="flex-1 overflow-y-auto p-3 space-y-2.5" id="entitySidebarList">
+                <!-- Entities populated via JavaScript -->
+            </div>
+
+            <!-- ER-Diagram Legend -->
+            <div class="p-3 bg-slate-950/80 border-t border-slate-800 text-[11px] font-khmer text-slate-400">
+                <p class="text-slate-300 font-semibold mb-1 flex items-center gap-1">
+                    <i data-lucide="info" class="w-3.5 h-3.5 text-blue-400"></i> របៀបប្រើប្រាស់ (Mobile & Desktop):
+                </p>
+                <p class="leading-relaxed text-[10px] text-slate-400">ប្រើ Touch ពីរម្រាមដៃដើម្បី Zoom, drag ដើម្បី Drag រកមើល Table, ឬចុចលើ Entity ដើម្បី Highlight ទំនាក់ទំនង។</p>
+            </div>
+        </aside>
+
+        <main class="flex-1 relative overflow-hidden bg-slate-950 flex flex-col">
+
+            <!-- Mobile & Desktop Legend Floating Drawer -->
+            <div class="absolute bottom-16 md:bottom-4 left-3 z-20 bg-slate-900/90 backdrop-blur border border-slate-800 rounded-xl p-2.5 shadow-2xl max-w-[280px] sm:max-w-xs text-[10px] sm:text-xs font-khmer">
+                <button onclick="toggleLegendContent()" class="w-full font-bold text-slate-200 flex items-center justify-between text-left focus:outline-none">
+                    <span class="flex items-center gap-1.5">
+                        <i data-lucide="layers" class="w-3.5 h-3.5 text-blue-400"></i>
+                        ពន្យល់ប្រភេទ Attribute
+                    </span>
+                    <i id="legendChevron" data-lucide="chevron-up" class="w-3.5 h-3.5 text-slate-400 transition-transform"></i>
+                </button>
+                <div id="legendContent" class="mt-2 grid grid-cols-2 gap-x-2 gap-y-1.5 text-slate-300 border-t border-slate-800/80 pt-2">
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-3 h-2 rounded-full bg-emerald-500/30 border border-emerald-400 inline-block shrink-0"></span>
+                        <span><b>Simple</b></span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-3 h-2 rounded-full bg-amber-500/30 border border-amber-400 inline-block shrink-0"></span>
+                        <span><b>Composite</b></span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-3 h-2 rounded-full bg-purple-500/30 border-2 border-purple-400 inline-block shrink-0"></span>
+                        <span><b>Multi-valued</b></span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-3 h-2 rounded-full bg-sky-500/30 border border-dashed border-sky-400 inline-block shrink-0"></span>
+                        <span><b>Derived</b></span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-3 h-2 rounded-full bg-amber-500 border-b-2 border-amber-200 inline-block shrink-0"></span>
+                        <span><b>Primary Key</b></span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="w-3 h-0.5 bg-slate-400 inline-block shrink-0"></span>
+                        <span><b>Relationship</b></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mobile Quick Control Bar Bottom Right -->
+            <div class="md:hidden fixed bottom-4 right-3 z-20 flex items-center bg-slate-900/95 border border-slate-800 rounded-full p-1 shadow-xl backdrop-blur">
+                <button onclick="zoomCanvas(0.2)" class="p-2 text-slate-200 hover:text-white rounded-full"><i data-lucide="plus" class="w-4 h-4"></i></button>
+                <button onclick="zoomCanvas(-0.2)" class="p-2 text-slate-200 hover:text-white rounded-full"><i data-lucide="minus" class="w-4 h-4"></i></button>
+                <button onclick="resetZoom()" class="p-2 text-slate-200 hover:text-white rounded-full"><i data-lucide="rotate-ccw" class="w-4 h-4"></i></button>
+            </div>
+
+            <!-- SVG Diagram Viewport -->
+            <div id="viewport" class="w-full h-full overflow-hidden relative svg-container">
+                <svg id="erSvg" class="w-full h-full absolute inset-0" xmlns="http://www.w3.org/2000/svg">
+                    <g id="diagramGroup">
+                        <g id="linesGroup"></g>
+                        <g id="nodesGroup"></g>
+                    </g>
+                </svg>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const schemaData = {
+            entities: [
+                {
+                    id: "DEPARTMENTS",
+                    title: "DEPARTMENTS",
+                    khmerTitle: "ដេប៉ាតឺម៉ង់ / ផ្នែក",
+                    x: 220, y: 100,
+                    attributes: [
+                        { name: "DepartmentID", type: "pk", khmer: "អត្តលេខដេប៉ាតឺម៉ង់" },
+                        { name: "DepartmentName", type: "simple", khmer: "ឈ្មោះដេប៉ាតឺម៉ង់" },
+                        { name: "Code", type: "simple", khmer: "កូដដេប៉ាតឺម៉ង់" }
+                    ]
+                },
+                {
+                    id: "CLASSES",
+                    title: "CLASSES",
+                    khmerTitle: "ថ្នាក់រៀន",
+                    x: 220, y: 320,
+                    attributes: [
+                        { name: "ClassID", type: "pk" },
+                        { name: "ClassName", type: "simple" },
+                        { name: "DepartmentID", type: "fk" }
+                    ]
+                },
+                {
+                    id: "TEACHERS",
+                    title: "TEACHERS",
+                    khmerTitle: "គ្រូបង្រៀន",
+                    x: 20, y: 320,
+                    attributes: [
+                        { name: "TeacherID", type: "pk" },
+                        { name: "FirstName", type: "simple" },
+                        { name: "LastName", type: "simple" }
+                    ]
+                },
+                {
+                    id: "CLASSTEACHERS",
+                    title: "CLASSTEACHERS",
+                    khmerTitle: "តំណាងគ្រូបង្រៀនថ្នាក់",
+                    x: 20, y: 550,
+                    attributes: [
+                        { name: "ClassTeacherID", type: "pk" },
+                        { name: "ClassID", type: "fk" },
+                        { name: "TeacherID", type: "fk" }
+                    ]
+                },
+                {
+                    id: "COURSES",
+                    title: "COURSES",
+                    khmerTitle: "មុខវិជ្ជាសិក្សា",
+                    x: 220, y: 550,
+                    attributes: [
+                        { name: "CourseID", type: "pk" },
+                        { name: "CourseCode", type: "simple" },
+                        { name: "CourseTitle", type: "simple" },
+                        { name: "Credits", type: "simple" },
+                        { name: "DepartmentID", type: "fk" }
+                    ]
+                },
+                {
+                    id: "SEMESTERS",
+                    title: "SEMESTERS",
+                    khmerTitle: "ឆមាសសិក្សា",
+                    x: 520, y: 100,
+                    attributes: [
+                        { name: "SemesterID", type: "pk" },
+                        { name: "SemesterName", type: "simple" },
+                        { name: "StartDate", type: "simple" },
+                        { name: "EndDate", type: "simple" }
+                    ]
+                },
+                {
+                    id: "STUDENTENROLLMENTS",
+                    title: "STUDENTENROLLMENTS",
+                    khmerTitle: "ការចុះឈ្មោះសិស្ស",
+                    x: 520, y: 350,
+                    attributes: [
+                        { name: "EnrollmentID", type: "pk" },
+                        { name: "StudentID", type: "fk" },
+                        { name: "ClassID", type: "fk" },
+                        { name: "SemesterID", type: "fk" }
+                    ]
+                },
+                {
+                    id: "ATTENDANCE",
+                    title: "ATTENDANCE",
+                    khmerTitle: "វត្តមានសិស្ស",
+                    x: 520, y: 620,
+                    attributes: [
+                        { name: "AttendanceID", type: "pk" },
+                        { name: "StudentID", type: "fk" },
+                        { name: "Status", type: "simple" }
+                    ]
+                },
+                {
+                    id: "STUDENTS",
+                    title: "STUDENTS",
+                    khmerTitle: "សិស្ស / និស្សិត",
+                    x: 880, y: 380,
+                    isMain: true,
+                    attributes: [
+                        { name: "StudentID", type: "pk" },
+                        { name: "FirstName", type: "simple" },
+                        { name: "LastName", type: "simple" },
+                        { name: "DOB", type: "simple" },
+                        { name: "Phone", type: "multivalued", khmer: "លេខទូរស័ព្ទ (ច្រើនខ្សែ)" },
+                        { name: "Calculated Age", type: "derived", khmer: "អាយុ (គណនាស្វ័យប្រវត្តិ)" },
+                        { 
+                            name: "Address", 
+                            type: "composite", 
+                            subAttributes: ["Street", "City", "State", "Country"],
+                            khmer: "អាសយដ្ឋាន (បំបែកជាផ្លូវ, ក្រុង...)" 
+                        }
+                    ]
+                },
+                {
+                    id: "PARENTS",
+                    title: "PARENTS",
+                    khmerTitle: "មាតាបិតា / អ្នកអាណាព្យាបាល",
+                    x: 1300, y: 180,
+                    attributes: [
+                        { name: "ParentID", type: "pk" },
+                        { name: "FatherName", type: "simple" },
+                        { name: "MotherName", type: "simple" },
+                        { name: "PrimaryPhone", type: "simple" }
+                    ]
+                },
+                {
+                    id: "EXAMS",
+                    title: "EXAMS",
+                    khmerTitle: "ប្រឡង",
+                    x: 40, y: 820,
+                    attributes: [
+                        { name: "ExamID", type: "pk" },
+                        { name: "ExamDate", type: "simple" }
+                    ]
+                },
+                {
+                    id: "MARKS",
+                    title: "MARKS",
+                    khmerTitle: "ពិន្ទុ",
+                    x: 300, y: 820,
+                    attributes: [
+                        { name: "MarkID", type: "pk" },
+                        { name: "ExamID", type: "fk" },
+                        { name: "StudentID", type: "fk" },
+                        { name: "MarksObtained", type: "simple" }
+                    ]
+                },
+                {
+                    id: "STUDENTINVOICES",
+                    title: "STUDENTINVOICES",
+                    khmerTitle: "វិក្កយបត្រសិស្ស",
+                    x: 680, y: 820,
+                    attributes: [
+                        { name: "InvoiceID", type: "pk" },
+                        { name: "StudentID", type: "fk" },
+                        { name: "TotalAmount", type: "simple" },
+                        { name: "Status", type: "simple" }
+                    ]
+                },
+                {
+                    id: "PAYMENTS",
+                    title: "PAYMENTS",
+                    khmerTitle: "ការទូទាត់ប្រាក់",
+                    x: 1000, y: 820,
+                    attributes: [
+                        { name: "PaymentID", type: "pk" },
+                        { name: "InvoiceID", type: "fk" },
+                        { name: "PaymentDate", type: "simple" },
+                        { name: "AmountPaid", type: "simple" }
+                    ]
+                },
+                {
+                    id: "USERS",
+                    title: "USERS",
+                    khmerTitle: "អ្នកប្រើប្រាស់",
+                    x: 1300, y: 500,
+                    attributes: [
+                        { name: "User_ID", type: "pk" },
+                        { name: "Username", type: "simple" },
+                        { name: "PasswordHash", type: "simple" },
+                        { name: "IsActive BIT", type: "simple" }
+                    ]
+                },
+                {
+                    id: "ROLES",
+                    title: "ROLES",
+                    khmerTitle: "តួនាទី",
+                    x: 1600, y: 500,
+                    attributes: [
+                        { name: "Role_ID", type: "pk" },
+                        { name: "RoleName", type: "simple" },
+                        { name: "User Permissions List", type: "multivalued" }
+                    ]
+                }
+            ],
+            relationships: [
+                { from: "DEPARTMENTS", to: "CLASSES", label: "មាន" },
+                { from: "DEPARTMENTS", to: "COURSES", label: "ផ្តល់ជូន" },
+                { from: "CLASSES", to: "STUDENTENROLLMENTS", label: "ថ្នាក់រៀន" },
+                { from: "CLASSES", to: "CLASSTEACHERS", label: "គ្រូបន្ទុកថ្នាក់" },
+                { from: "TEACHERS", to: "CLASSTEACHERS", label: "បង្រៀន" },
+                { from: "COURSES", to: "MARKS", label: "ពិន្ទុមុខវិជ្ជា" },
+                { from: "SEMESTERS", to: "STUDENTENROLLMENTS", label: "ឆមាសសិក្សា" },
+                { from: "STUDENTENROLLMENTS", to: "STUDENTS", label: "ចុះឈ្មោះ" },
+                { from: "STUDENTS", to: "ATTENDANCE", label: "វត្តមាន" },
+                { from: "STUDENTS", to: "MARKS", label: "ទទួលពិន្ទុ" },
+                { from: "EXAMS", to: "MARKS", label: "ប្រឡង" },
+                { from: "STUDENTS", to: "STUDENTINVOICES", label: "វិក្កយបត្រ" },
+                { from: "STUDENTINVOICES", to: "PAYMENTS", label: "ការទូទាត់" },
+                { from: "STUDENTS", to: "PARENTS", label: "អាណាព្យាបាល" },
+                { from: "STUDENTS", to: "USERS", label: "គណនី" },
+                { from: "USERS", to: "ROLES", label: "តួនាទី" }
+            ]
+        };
+
+        // Global State Variables
+        let zoomLevel = 0.85;
+        let panX = 20;
+        let panY = 20;
+        let isDragging = false;
+        let startX, startY;
+        let touchStartDist = 0;
+        let isSidebarOpen = false;
+
+        const viewport = document.getElementById('viewport');
+        const diagramGroup = document.getElementById('diagramGroup');
+        const linesGroup = document.getElementById('linesGroup');
+        const nodesGroup = document.getElementById('nodesGroup');
+
+        // Adjust initial scale based on mobile width
+        if (window.innerWidth < 768) {
+            zoomLevel = 0.55;
+            panX = 10;
+            panY = 10;
+        }
+
+        function initDiagram() {
+            renderSidebar();
+            renderNodesAndAttributes();
+            renderRelationships();
+            setupPanZoomAndTouch();
+            lucide.createIcons();
+            updateTransform();
+        }
+
+        function renderSidebar() {
+            const container = document.getElementById('entitySidebarList');
+            container.innerHTML = '';
+
+            schemaData.entities.forEach(entity => {
+                const card = document.createElement('div');
+                card.id = `sidebar-card-${entity.id}`;
+                card.className = `p-2.5 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800/80 cursor-pointer transition text-xs font-khmer`;
+                card.onclick = () => {
+                    highlightEntity(entity.id);
+                    if (window.innerWidth < 768) toggleSidebar();
+                };
+
+                let attrsHtml = entity.attributes.map(a => {
+                    let badgeColor = "bg-emerald-500/10 text-emerald-300 border-emerald-500/30";
+                    if (a.type === 'pk') badgeColor = "bg-amber-500/20 text-amber-300 font-bold border-amber-500/40";
+                    if (a.type === 'fk') badgeColor = "bg-blue-500/10 text-blue-300 border-blue-500/30";
+                    if (a.type === 'multivalued') badgeColor = "bg-purple-500/20 text-purple-300 border-purple-500/30";
+                    if (a.type === 'derived') badgeColor = "bg-sky-500/20 text-sky-300 border-sky-500/30";
+                    if (a.type === 'composite') badgeColor = "bg-yellow-500/20 text-yellow-300 border-yellow-500/30";
+
+                    return `<span class="inline-block px-1.5 py-0.5 rounded text-[10px] border ${badgeColor} mr-1 mb-1">${a.name}</span>`;
+                }).join('');
+
+                card.innerHTML = `
+                    <div class="flex items-center justify-between font-bold text-slate-200 mb-1">
+                        <span class="text-blue-400 font-sans">${entity.title}</span>
+                        <span class="text-[10px] text-slate-400">${entity.khmerTitle}</span>
+                    </div>
+                    <div class="mt-1 flex flex-wrap">${attrsHtml}</div>
+                `;
+
+                container.appendChild(card);
+            });
+        }
+
+        function renderNodesAndAttributes() {
+            nodesGroup.innerHTML = '';
+
+            schemaData.entities.forEach(entity => {
+                const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                g.setAttribute("id", `entity-group-${entity.id}`);
+                g.setAttribute("transform", `translate(${entity.x}, ${entity.y})`);
+                g.setAttribute("class", "cursor-pointer transition-all");
+                g.onclick = (e) => {
+                    e.stopPropagation();
+                    highlightEntity(entity.id);
+                };
+
+                const boxWidth = 170;
+                const headerHeight = 28;
+                const rowHeight = 20;
+                const boxHeight = headerHeight + (entity.attributes.length * rowHeight) + 8;
+
+                // Box Outer Rect
+                const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                rect.setAttribute("width", boxWidth);
+                rect.setAttribute("height", boxHeight);
+                rect.setAttribute("rx", "8");
+                rect.setAttribute("fill", entity.isMain ? "#1e293b" : "#0f172a");
+                rect.setAttribute("stroke", entity.isMain ? "#3b82f6" : "#334155");
+                rect.setAttribute("stroke-width", entity.isMain ? "2.5" : "1.5");
+                rect.setAttribute("class", "entity-box");
+                rect.setAttribute("id", `entity-box-${entity.id}`);
+                g.appendChild(rect);
+
+                // Header Top Banner
+                const header = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                header.setAttribute("d", `M 0 8 Q 0 0 8 0 L ${boxWidth - 8} 0 Q ${boxWidth} 0 ${boxWidth} 8 L ${boxWidth} ${headerHeight} L 0 ${headerHeight} Z`);
+                header.setAttribute("fill", entity.isMain ? "#2563eb" : "#1e293b");
+                g.appendChild(header);
+
+                // Header Title
+                const titleText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                titleText.setAttribute("x", boxWidth / 2);
+                titleText.setAttribute("y", "18");
+                titleText.setAttribute("fill", "#ffffff");
+                titleText.setAttribute("font-size", "11");
+                titleText.setAttribute("font-weight", "bold");
+                titleText.setAttribute("text-anchor", "middle");
+                titleText.setAttribute("font-family", "Inter, sans-serif");
+                titleText.textContent = entity.title;
+                g.appendChild(titleText);
+
+                // Attributes List
+                entity.attributes.forEach((attr, idx) => {
+                    const yPos = headerHeight + 16 + (idx * rowHeight);
+                    const attrText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                    attrText.setAttribute("x", "12");
+                    attrText.setAttribute("y", yPos);
+                    attrText.setAttribute("font-size", "10");
+                    attrText.setAttribute("font-family", "Inter, sans-serif");
+
+                    if (attr.type === 'pk') {
+                        attrText.setAttribute("fill", "#fbbf24");
+                        attrText.setAttribute("font-weight", "bold");
+                        attrText.setAttribute("text-decoration", "underline");
+                        attrText.textContent = `🔑 ${attr.name} (PK)`;
+                    } else if (attr.type === 'fk') {
+                        attrText.setAttribute("fill", "#60a5fa");
+                        attrText.textContent = `🔗 ${attr.name} (FK)`;
+                    } else if (attr.type === 'multivalued') {
+                        attrText.setAttribute("fill", "#c084fc");
+                        attrText.textContent = `◈ ${attr.name}`;
+                    } else if (attr.type === 'derived') {
+                        attrText.setAttribute("fill", "#38bdf8");
+                        attrText.textContent = `◌ ${attr.name}`;
+                    } else if (attr.type === 'composite') {
+                        attrText.setAttribute("fill", "#facc15");
+                        attrText.textContent = `◫ ${attr.name}`;
+                    } else {
+                        attrText.setAttribute("fill", "#cbd5e1");
+                        attrText.textContent = `• ${attr.name}`;
+                    }
+
+                    g.appendChild(attrText);
+                });
+
+                if (entity.id === 'STUDENTS') {
+                    renderSpecialOvals(g, boxWidth, boxHeight);
+                }
+
+                nodesGroup.appendChild(g);
+            });
+        }
+
+        function renderSpecialOvals(parentG, boxWidth, boxHeight) {
+            createOvalAttribute(parentG, 220, 100, "Address", "composite");
+            createConnectorLine(parentG, boxWidth, boxHeight/2, 170, 90);
+
+            createOvalAttribute(parentG, 290, 30, "Street", "simple");
+            createOvalAttribute(parentG, 300, 80, "City", "simple");
+            createOvalAttribute(parentG, 300, 130, "State", "simple");
+            createOvalAttribute(parentG, 280, 180, "Country", "simple");
+
+            createConnectorLine(parentG, 220, 100, 260, 35);
+            createConnectorLine(parentG, 220, 100, 270, 80);
+            createConnectorLine(parentG, 220, 100, 270, 130);
+            createConnectorLine(parentG, 220, 100, 250, 175);
+
+            createOvalAttribute(parentG, 210, -20, "Phone", "multivalued");
+            createConnectorLine(parentG, boxWidth - 10, 20, 175, -5);
+
+            createOvalAttribute(parentG, 120, -40, "Calculated Age", "derived");
+            createConnectorLine(parentG, boxWidth/2, 0, 120, -25);
+        }
+
+        function createOvalAttribute(group, x, y, label, type) {
+            const ovalG = document.createElementNS("http://www.w3.org/2000/svg", "g");
+            ovalG.setAttribute("transform", `translate(${x}, ${y})`);
+
+            const ellipse = document.createElementNS("http://www.w3.org/2000/svg", "ellipse");
+            ellipse.setAttribute("rx", "42");
+            ellipse.setAttribute("ry", "16");
+            ellipse.setAttribute("cx", "0");
+            ellipse.setAttribute("cy", "0");
+
+            if (type === 'multivalued') {
+                ellipse.setAttribute("fill", "#581c87");
+                ellipse.setAttribute("stroke", "#c084fc");
+                ellipse.setAttribute("stroke-width", "2");
+
+                const inner = document.createElementNS("http://www.w3.org/2000/svg", "ellipse");
+                inner.setAttribute("rx", "37");
+                inner.setAttribute("ry", "12");
+                inner.setAttribute("fill", "none");
+                inner.setAttribute("stroke", "#c084fc");
+                inner.setAttribute("stroke-width", "1");
+                ovalG.appendChild(inner);
+            } else if (type === 'derived') {
+                ellipse.setAttribute("fill", "#0c4a6e");
+                ellipse.setAttribute("stroke", "#38bdf8");
+                ellipse.setAttribute("stroke-width", "1.5");
+                ellipse.setAttribute("stroke-dasharray", "4 3");
+            } else if (type === 'composite') {
+                ellipse.setAttribute("fill", "#713f12");
+                ellipse.setAttribute("stroke", "#fde047");
+                ellipse.setAttribute("stroke-width", "1.5");
+            } else {
+                ellipse.setAttribute("fill", "#064e3b");
+                ellipse.setAttribute("stroke", "#34d399");
+                ellipse.setAttribute("stroke-width", "1.5");
+            }
+
+            ovalG.appendChild(ellipse);
+
+            const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            text.setAttribute("x", "0");
+            text.setAttribute("y", "4");
+            text.setAttribute("text-anchor", "middle");
+            text.setAttribute("fill", "#ffffff");
+            text.setAttribute("font-size", "9");
+            text.setAttribute("font-family", "Inter, sans-serif");
+            text.textContent = label;
+            ovalG.appendChild(text);
+
+            group.appendChild(ovalG);
+        }
+
+        function createConnectorLine(group, x1, y1, x2, y2) {
+            const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            line.setAttribute("x1", x1);
+            line.setAttribute("y1", y1);
+            line.setAttribute("x2", x2);
+            line.setAttribute("y2", y2);
+            line.setAttribute("stroke", "#64748b");
+            line.setAttribute("stroke-width", "1");
+            group.appendChild(line);
+        }
+
+        function renderRelationships() {
+            linesGroup.innerHTML = '';
+
+            schemaData.relationships.forEach((rel) => {
+                const fromEnt = schemaData.entities.find(e => e.id === rel.from);
+                const toEnt = schemaData.entities.find(e => e.id === rel.to);
+
+                if (!fromEnt || !toEnt) return;
+
+                const x1 = fromEnt.x + 85;
+                const y1 = fromEnt.y + 40;
+                const x2 = toEnt.x + 85;
+                const y2 = toEnt.y + 40;
+
+                const lineG = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                lineG.setAttribute("id", `rel-line-${rel.from}-${rel.to}`);
+
+                const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                const dx = (x2 - x1) / 2;
+                const dStr = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+
+                path.setAttribute("d", dStr);
+                path.setAttribute("fill", "none");
+                path.setAttribute("stroke", "#475569");
+                path.setAttribute("stroke-width", "1.5");
+                path.setAttribute("class", "rel-line");
+
+                lineG.appendChild(path);
+
+                const midX = (x1 + x2) / 2;
+                const midY = (y1 + y2) / 2;
+
+                const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+                rect.setAttribute("x", midX - 25);
+                rect.setAttribute("y", midY - 9);
+                rect.setAttribute("width", "50");
+                rect.setAttribute("height", "18");
+                rect.setAttribute("rx", "4");
+                rect.setAttribute("fill", "#0f172a");
+                rect.setAttribute("stroke", "#334155");
+
+                const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+                text.setAttribute("x", midX);
+                text.setAttribute("y", midY + 3);
+                text.setAttribute("text-anchor", "middle");
+                text.setAttribute("fill", "#94a3b8");
+                text.setAttribute("font-size", "8");
+                text.setAttribute("font-family", "Kantumruy Pro, sans-serif");
+                text.textContent = rel.label;
+
+                lineG.appendChild(rect);
+                lineG.appendChild(text);
+
+                linesGroup.appendChild(lineG);
+            });
+        }
+
+        function setupPanZoomAndTouch() {
+            // Mouse Drag
+            viewport.addEventListener('mousedown', (e) => {
+                if (e.target.closest('g[id^="entity-group-"]')) return;
+                isDragging = true;
+                startX = e.clientX - panX;
+                startY = e.clientY - panY;
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                panX = e.clientX - startX;
+                panY = e.clientY - startY;
+                updateTransform();
+            });
+
+            window.addEventListener('mouseup', () => { isDragging = false; });
+
+            // Touch Drag & Pinch-Zoom for Mobile
+            viewport.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 1) {
+                    if (e.target.closest('g[id^="entity-group-"]')) return;
+                    isDragging = true;
+                    startX = e.touches[0].clientX - panX;
+                    startY = e.touches[0].clientY - panY;
+                } else if (e.touches.length === 2) {
+                    isDragging = false;
+                    touchStartDist = Math.hypot(
+                        e.touches[0].clientX - e.touches[1].clientX,
+                        e.touches[0].clientY - e.touches[1].clientY
+                    );
+                }
+            }, { passive: true });
+
+            viewport.addEventListener('touchmove', (e) => {
+                if (isDragging && e.touches.length === 1) {
+                    panX = e.touches[0].clientX - startX;
+                    panY = e.touches[0].clientY - startY;
+                    updateTransform();
+                } else if (e.touches.length === 2) {
+                    const dist = Math.hypot(
+                        e.touches[0].clientX - e.touches[1].clientX,
+                        e.touches[0].clientY - e.touches[1].clientY
+                    );
+                    const factor = dist / touchStartDist;
+                    if (Math.abs(1 - factor) > 0.05) {
+                        zoomCanvas(factor > 1 ? 0.04 : -0.04);
+                        touchStartDist = dist;
+                    }
+                }
+            }, { passive: true });
+
+            viewport.addEventListener('touchend', () => { isDragging = false; });
+
+            // Mouse Wheel Zoom
+            viewport.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const delta = e.deltaY > 0 ? -0.08 : 0.08;
+                zoomCanvas(delta);
+            }, { passive: false });
+
+            viewport.addEventListener('click', () => { highlightEntity(null); });
+        }
+
+        function zoomCanvas(delta) {
+            zoomLevel = Math.min(Math.max(0.3, zoomLevel + delta), 2.5);
+            updateTransform();
+        }
+
+        function resetZoom() {
+            zoomLevel = window.innerWidth < 768 ? 0.55 : 0.85;
+            panX = 20;
+            panY = 20;
+            updateTransform();
+            highlightEntity(null);
+        }
+
+        function updateTransform() {
+            diagramGroup.setAttribute('transform', `translate(${panX}, ${panY}) scale(${zoomLevel})`);
+        }
+
+        function highlightEntity(id) {
+            document.querySelectorAll('[id^="entity-group-"]').forEach(el => el.classList.remove('highlighted-node', 'dimmed'));
+            document.querySelectorAll('.rel-line').forEach(el => {
+                el.classList.remove('highlighted-line');
+                el.setAttribute('stroke', '#475569');
+            });
+
+            if (!id) return;
+
+            document.querySelectorAll('[id^="sidebar-card-"]').forEach(card => card.classList.remove('border-blue-500', 'bg-blue-900/30'));
+            const card = document.getElementById(`sidebar-card-${id}`);
+            if (card) {
+                card.classList.add('border-blue-500', 'bg-blue-900/30');
+                card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+
+            const connectedIds = new Set([id]);
+            schemaData.relationships.forEach(rel => {
+                if (rel.from === id) {
+                    connectedIds.add(rel.to);
+                    const line = document.querySelector(`#rel-line-${rel.from}-${rel.to} path`);
+                    if (line) line.classList.add('highlighted-line');
+                }
+                if (rel.to === id) {
+                    connectedIds.add(rel.from);
+                    const line = document.querySelector(`#rel-line-${rel.from}-${rel.to} path`);
+                    if (line) line.classList.add('highlighted-line');
+                }
+            });
+
+            schemaData.entities.forEach(ent => {
+                const node = document.getElementById(`entity-group-${ent.id}`);
+                if (connectedIds.has(ent.id)) {
+                    node.classList.add('highlighted-node');
+                } else {
+                    node.classList.add('dimmed');
+                }
+            });
+        }
+
+        function handleSearch() {
+            const query = document.getElementById('searchInput').value.toLowerCase().trim();
+            const clearBtn = document.getElementById('clearSearchBtn');
+
+            if (query) {
+                clearBtn.classList.remove('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+                highlightEntity(null);
+                return;
+            }
+
+            const matchedEntity = schemaData.entities.find(e => 
+                e.title.toLowerCase().includes(query) || 
+                e.khmerTitle.toLowerCase().includes(query) ||
+                e.attributes.some(a => a.name.toLowerCase().includes(query))
+            );
+
+            if (matchedEntity) {
+                highlightEntity(matchedEntity.id);
+            }
+        }
+
+        function clearSearch() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('clearSearchBtn').classList.add('hidden');
+            highlightEntity(null);
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('drawerOverlay');
+
+            if (window.innerWidth < 768) {
+                isSidebarOpen = !isSidebarOpen;
+                if (isSidebarOpen) {
+                    sidebar.classList.remove('translate-y-full');
+                    overlay.classList.remove('hidden');
+                } else {
+                    sidebar.classList.add('translate-y-full');
+                    overlay.classList.add('hidden');
+                }
+            } else {
+                sidebar.classList.toggle('hidden');
+            }
+        }
+
+        function toggleLegendContent() {
+            const content = document.getElementById('legendContent');
+            const chevron = document.getElementById('legendChevron');
+            content.classList.toggle('hidden');
+            chevron.classList.toggle('rotate-180');
+        }
+
+        // Initialize App on Load
+        window.onload = function() {
+            initDiagram();
+        };
+
+        // Window Resize Handling
+        window.onresize = function() {
+            if (window.innerWidth >= 768) {
+                document.getElementById('drawerOverlay').classList.add('hidden');
+                document.getElementById('sidebar').classList.remove('translate-y-full');
+            }
+        };
+    </script>
+</body>
+</html>
